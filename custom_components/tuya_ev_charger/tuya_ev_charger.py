@@ -171,6 +171,54 @@ class TuyaEVChargerClient:
                     LOGGER.debug("Closing the stuck connection failed: %s", err)
             raise
 
+    def _async_start_dp6_listener(self) -> None:
+        if self._dp_profile != CHARGER_PROFILE_QCCDZ_DP6_V1:
+            return
+        if self._dp6_listener_task is not None and not self._dp6_listener_task.done():
+            return
+        self._dp6_listener_stop.clear()
+        self._dp6_listener_task = asyncio.create_task(
+            self._async_dp6_receive_loop(),
+            name=f"{self._device_id}_dp6_listener",
+        )
+
+    async def _async_stop_dp6_listener(self) -> None:
+        task = self._dp6_listener_task
+        if task is None:
+            return
+        self._dp6_listener_stop.set()
+        try:
+            # receive() uses the short DP6 socket timeout, so this normally
+            # returns within one second without cancelling a worker thread.
+            await task
+        except asyncio.CancelledError:
+            raise
+        except Exception as err:  # noqa: BLE001 - listener is best effort
+            LOGGER.debug("DP6 listener stopped with an error: %s", err)
+        finally:
+            self._dp6_listener_task = None
+            self._dp6_listener_stop = asyncio.Event()
+
+    async def _async_dp6_receive_loop(self) -> None:
+        """Receive unsolicited DP6 frames on the charger's persistent socket."""
+        last_heartbeat = time.monotonic()
+        while not self._dp6_listener_stop.is_set():
+            try:
+                async with self._io_lock:
+                    if self._dp6_listener_stop.is_set():
+                        break
+                    device = self._get_device()
+                    await self._async_in_thread(device.receive)
+                    now = time.monotonic()
+                    if now - last_heartbeat >= QCCDZ_DP6_HEARTBEAT_INTERVAL_S:
+                        await self._async_in_thread(device.heartbeat, True)
+                        last_heartbeat = now
+            except asyncio.CancelledError:
+                raise
+            except Exception as err:  # noqa: BLE001 - keep telemetry alive after a transient socket error
+                LOGGER.debug("DP6 asynchronous receive failed: %s", err)
+                await asyncio.sleep(0.1)
+
     async def async_update_host(self, host: str) -> None:
         """Point the client at a new IP (after a DHCP change) and reconnect."""
         self._host = host
