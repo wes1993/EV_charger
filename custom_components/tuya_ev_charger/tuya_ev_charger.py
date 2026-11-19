@@ -27,6 +27,7 @@ from .const import (
     DEFAULT_CHARGER_PROFILE,
     DEFAULT_CHARGER_PROFILE_JSON,
     QCCDZ_MAX_CURRENT_A,
+    QCCDZ_DP6_MAX_CURRENT_A,
     TUYA_CONTROL_PORT,
     ConnectionFault,
 )
@@ -394,8 +395,19 @@ class TuyaEVChargerClient:
     async def async_get_metrics(self) -> EVMetrics | None:
         async with self._io_lock:
             dps = await self._async_get_dps_payload()
+            if dps is not None and self._dp_profile == CHARGER_PROFILE_QCCDZ_DP6_V1:
+                # TinyTuya merges unsolicited receive() payloads into its
+                # persistent cache. Use that merged view so the normal status
+                # response and the latest DP 6 frame are decoded together.
+                cached = self._get_device().cached_status(nowait=True)
+                if isinstance(cached, dict) and isinstance(cached.get("dps"), dict):
+                    dps = cached["dps"]
         if dps is None:
             return None
+        if self._dp_profile == CHARGER_PROFILE_QCCDZ_DP6_V1:
+            return decode_qccdz_dp6_metrics(
+                dps, self._dp, self._max_current_a or QCCDZ_DP6_MAX_CURRENT_A
+            )
         if self._dp_profile == CHARGER_PROFILE_QCCDZ_V1:
             metrics = decode_qccdz_metrics(
                 dps, self._dp, self._max_current_a or QCCDZ_MAX_CURRENT_A
