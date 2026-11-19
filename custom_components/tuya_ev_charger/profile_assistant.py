@@ -92,7 +92,12 @@ def suggest_profile(dps: dict[str, Any]) -> str:
         "charger_fault",
     }
     if (
-        {QCCDZ_DP6_WORK_STATE, QCCDZ_DP_CURRENT_TARGET, QCCDZ_DP_SWITCH, QCCDZ_DP_SYSTEM_VERSION}.issubset(present)
+        {
+            QCCDZ_DP6_WORK_STATE,
+            QCCDZ_DP_CURRENT_TARGET,
+            QCCDZ_DP_SWITCH,
+            QCCDZ_DP_SYSTEM_VERSION,
+        }.issubset(present)
         and str(dps[QCCDZ_DP6_WORK_STATE]).strip().lower() in dp6_states
     ):
         return CHARGER_PROFILE_QCCDZ_DP6_V1
