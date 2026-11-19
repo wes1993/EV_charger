@@ -281,6 +281,7 @@ class TuyaEVChargerClient:
         on unload/reload leaves a zombie socket that makes the device refuse
         every later connection (including our own next instance).
         """
+        await self._async_stop_dp6_listener()
         async with self._io_lock:
             if self._device is not None:
                 device, self._device = self._device, None
