@@ -15,6 +15,7 @@ from .charger_metrics import (
     EVMetrics,
     decode_feyree_metrics,
     decode_metrics,
+    decode_qccdz_dp6_metrics,
     decode_qccdz_metrics,
     values_match,
 )
@@ -22,6 +23,7 @@ from .const import (
     ALLOWED_CURRENTS,
     CHARGER_PROFILE_FEYREE_V1,
     CHARGER_PROFILE_QCCDZ_V1,
+    CHARGER_PROFILE_QCCDZ_DP6_V1,
     DEFAULT_CHARGER_PROFILE,
     DEFAULT_CHARGER_PROFILE_JSON,
     QCCDZ_MAX_CURRENT_A,
@@ -49,6 +51,8 @@ SOCKET_RETRY_DELAY_S = 1
 # thread stuck inside tinytuya cannot hold the I/O lock, and with it every poll
 # and command, forever.
 IO_TIMEOUT_S = 20
+QCCDZ_DP6_RECEIVE_TIMEOUT_S = 1.0
+QCCDZ_DP6_HEARTBEAT_INTERVAL_S = 12.0
 
 
 def _configure_device(device: tinytuya.Device) -> None:
@@ -90,6 +94,8 @@ class TuyaEVChargerClient:
         self._io_lock = asyncio.Lock()
         # Set when a stuck call made us drop the socket; the next access rebuilds it.
         self._needs_reconnect = False
+        self._dp6_listener_task: asyncio.Task[None] | None = None
+        self._dp6_listener_stop = asyncio.Event()
 
     @property
     def device_id(self) -> str:
@@ -112,8 +118,10 @@ class TuyaEVChargerClient:
         return bool(getattr(self._dp, field, ""))
 
     async def async_connect(self) -> None:
+        await self._async_stop_dp6_listener()
         async with self._io_lock:
             self._build_device()
+        self._async_start_dp6_listener()
 
     def _build_device(self) -> tinytuya.Device:
         """Replace the current Device with a fresh one. Call with the I/O lock held."""
@@ -128,6 +136,12 @@ class TuyaEVChargerClient:
             version=self._protocol_version,
         )
         _configure_device(device)
+        if self._dp_profile == CHARGER_PROFILE_QCCDZ_DP6_V1:
+            # This firmware pushes DP 6 asynchronously. Keep one persistent
+            # socket so the listener can receive those frames while status and
+            # commands are still serialized through _io_lock.
+            device.set_socketPersistent(True)
+            device.set_socketTimeout(QCCDZ_DP6_RECEIVE_TIMEOUT_S)
         self._device = device
         self._needs_reconnect = False
         return device
