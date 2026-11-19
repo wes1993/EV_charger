@@ -479,3 +479,16 @@ def test_the_device_is_identified_by_the_device_id_and_the_mac_is_only_a_connect
     assert isinstance(entity, TuyaEVChargerEntity)
     assert info["identifiers"] == {("tuya_ev_charger", DEVICE_ID)}
     assert info["connections"] == {("mac", "aa:bb:cc:dd:ee:ff")}
+
+
+def test_qccdz_dp6_uses_select_instead_of_the_number_slider():
+    runtime = _runtime(
+        client=types.SimpleNamespace(device_id=DEVICE_ID, dp_profile="qccdz_dp6_v1")
+    )
+    entry = _entry(runtime=runtime)
+
+    numbers = _setup("number", entry)
+    selects = _setup("select", entry)
+
+    assert f"{DEVICE_ID}_charge_current" not in {e._attr_unique_id for e in numbers}
+    assert f"{DEVICE_ID}_charge_current_select" in {e._attr_unique_id for e in selects}

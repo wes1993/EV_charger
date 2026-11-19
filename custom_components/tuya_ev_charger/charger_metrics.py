@@ -9,6 +9,7 @@ decoding can be tested without a client; behaviour is unchanged.
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import re
@@ -24,8 +25,13 @@ from .const import (
     FEYREE_DP_VOLTAGE_L1,
     FEYREE_DP_VOLTAGE_L2,
     FEYREE_DP_VOLTAGE_L3,
+    QCCDZ_DP6_MAX_CURRENT_A,
+    QCCDZ_DP6_METRICS,
+    QCCDZ_DP6_WORK_STATE,
     QCCDZ_DP_CONNECTION_STATE,
     QCCDZ_DP_CURRENT,
+    QCCDZ_DP_CURRENT_TARGET,
+    QCCDZ_DP_FAULT,
     QCCDZ_DP_POWER,
     QCCDZ_DP_SESSION_ENERGY,
     QCCDZ_DP_SYSTEM_VERSION,
@@ -226,6 +232,93 @@ QCCDZ_PILOT_STATE_MAP: dict[str, str] = {
     "controlpi_6v_pwm": WORK_STATE_CHARGING,
     "controlpi_error": "ERRORPAUSE",
 }
+
+
+QCCDZ_DP6_STATE_MAP: dict[str, str] = {
+    "charger_free": "IDLE",
+    "charger_insert": "IDLEINS",
+    "charger_free_fault": "ERRORPAUSE",
+    "charger_wait": "WAIT",
+    "charger_charging": WORK_STATE_CHARGING,
+    "charger_pause": "PAUSE",
+    "charger_end": "STOP",
+    "charger_fault": "ERRORPAUSE",
+}
+
+
+def decode_qccdz_dp6_metrics(
+    dps: dict[str, Any], dp: DPProfile, max_current_a: int = QCCDZ_DP6_MAX_CURRENT_A
+) -> EVMetrics:
+    """Decode the qccdz DP 6 asynchronous 8-byte V/A/W frame.
+
+    DP 6 is Base64 encoded and contains voltage in 0.1 V, current in mA and
+    power in W. Unlike the older qccdz scalar DPs, these values are delivered
+    asynchronously on the persistent LAN connection and are not part of the
+    normal status response.
+    """
+    raw_state = _coerce_optional_text(dps.get(QCCDZ_DP6_WORK_STATE))
+    work_state_debug = (
+        QCCDZ_DP6_STATE_MAP.get(raw_state.lower(), raw_state.upper()) if raw_state else "UNKNOWN"
+    )
+    frame = _decode_qccdz_dp6_frame(dps.get(QCCDZ_DP6_METRICS))
+    phases: dict[str, PhaseMetrics] = {}
+    if frame is not None:
+        voltage, current, power_w = frame
+        phases["L1"] = PhaseMetrics(
+            voltage=voltage,
+            current=current,
+            power=round(power_w / 1000.0, 3),
+            raw_power=round(power_w / 1000.0, 3),
+        )
+    l1 = phases.get("L1")
+    energy = _coerce_optional_float(dps.get(QCCDZ_DP_SESSION_ENERGY))
+    firmware = _coerce_optional_text(dps.get(QCCDZ_DP_SYSTEM_VERSION))
+
+    return EVMetrics(
+        voltage_l1=l1.voltage if l1 else 0.0,
+        current_l1=l1.current if l1 else 0.0,
+        power_l1=l1.power if l1 else 0.0,
+        phases=phases,
+        total_power=l1.power if l1 else 0.0,
+        session_energy_kwh=round(energy / 100.0, 2) if energy is not None else None,
+        session_duration_s=None,
+        last_session_energy_kwh=None,
+        last_session_duration_s=None,
+        temperature=_coerce_float(dps.get(QCCDZ_DP_TEMPERATURE, 0)),
+        work_state=None,
+        work_state_debug=work_state_debug,
+        status=STATUS_MAP.get(work_state_debug),
+        plug_in_action=None,
+        do_charge=None,
+        current_target=coerce_optional_int(dps.get(QCCDZ_DP_CURRENT_TARGET)),
+        max_current_cfg=max_current_a,
+        nfc_enabled=None,
+        downcounter=None,
+        selftest=None,
+        alarm=_qccdz_fault_text(dps.get(QCCDZ_DP_FAULT)),
+        adjust_current_options=None,
+        product_variant=None,
+        charger_info={"sw_version": firmware} if firmware else {},
+        schedule_enabled=False,
+        schedule_start=None,
+        schedule_end=None,
+    )
+
+
+def _decode_qccdz_dp6_frame(raw: Any) -> tuple[float, float, float] | None:
+    """Decode DP 6 as (volts, amps, watts), or None for an invalid frame."""
+    if not isinstance(raw, str):
+        return None
+    try:
+        payload = base64.b64decode(raw, validate=True)
+    except (ValueError, TypeError):
+        return None
+    if len(payload) != 8:
+        return None
+    voltage = int.from_bytes(payload[0:2], "big") / 10.0
+    current = int.from_bytes(payload[2:5], "big") / 1000.0
+    power_w = float(int.from_bytes(payload[5:8], "big"))
+    return voltage, current, power_w
 
 
 def decode_qccdz_metrics(

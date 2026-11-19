@@ -76,6 +76,42 @@ async def async_disable_entities(
     return disabled
 
 
+async def async_restore_entities(
+    hass: HomeAssistant,
+    entry_id: str,
+    unique_id_suffixes: set[str],
+) -> int:
+    """Restore entities previously disabled by this integration for another profile."""
+    if not unique_id_suffixes:
+        return 0
+
+    registry = er.async_get(hass)
+    restored = 0
+    for entity in list(er.async_entries_for_config_entry(registry, entry_id)):
+        matched = next(
+            (key for key in unique_id_suffixes if entity.unique_id.endswith(f"_{key}")),
+            None,
+        )
+        if matched is None or not is_already_handled(entity):
+            continue
+        # Only undo our own disable; a user's or another integration's choice wins.
+        if entity.disabled_by is not er.RegistryEntryDisabler.INTEGRATION:
+            continue
+
+        options = dict(entity.options.get(DOMAIN) or {})
+        options.pop(ENTITY_OPTION_AUTO_DISABLED, None)
+        registry.async_update_entity_options(entity.entity_id, DOMAIN, options)
+        registry.async_update_entity(entity.entity_id, disabled_by=None)
+        restored += 1
+        LOGGER.debug(
+            "Re-enabled %s (%s) for the active charger profile.", entity.entity_id, matched
+        )
+
+    if restored:
+        LOGGER.info("Re-enabled %d entities for the active charger profile.", restored)
+    return restored
+
+
 def unavailable_capability_keys(metrics: EVMetrics) -> set[str]:
     """Entity keys this charger can never populate, so they read unavailable.
 

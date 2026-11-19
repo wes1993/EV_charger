@@ -407,6 +407,9 @@
       }
     },
     "select": {
+      "charge_current": {
+        "name": "Charging current"
+      },
       "surplus_profile": {
         "name": "Surplus profile"
       },

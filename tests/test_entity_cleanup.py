@@ -163,3 +163,47 @@ def test_no_reading_yet_means_nothing_is_concluded():
     from tuya_ev_charger.entity_cleanup import unavailable_capability_keys
 
     assert unavailable_capability_keys(None) == set()
+
+
+
+def test_an_integration_disabled_entity_is_restored_for_another_profile(monkeypatch):
+    from homeassistant.helpers import entity_registry as er
+    from tuya_ev_charger import entity_cleanup as module
+
+    entity = _entity(
+        "charge_current",
+        disabled=er.RegistryEntryDisabler.INTEGRATION,
+        handled=True,
+    )
+    registry = _Registry()
+    monkeypatch.setattr(module.er, "async_get", lambda hass: registry, raising=False)
+    monkeypatch.setattr(
+        module.er, "async_entries_for_config_entry", lambda reg, entry_id: [entity], raising=False
+    )
+
+    restored = asyncio.run(module.async_restore_entities(None, "e1", {"charge_current"}))
+
+    assert restored == 1
+    assert registry.entity_updates == [
+        ("sensor.charger_charge_current", {"disabled_by": None})
+    ]
+    assert registry.option_updates == [
+        ("sensor.charger_charge_current", "tuya_ev_charger", {})
+    ]
+
+
+def test_profile_restore_does_not_override_a_user_enabled_entity(monkeypatch):
+    from tuya_ev_charger import entity_cleanup as module
+
+    entity = _entity("charge_current", handled=True)
+    registry = _Registry()
+    monkeypatch.setattr(module.er, "async_get", lambda hass: registry, raising=False)
+    monkeypatch.setattr(
+        module.er, "async_entries_for_config_entry", lambda reg, entry_id: [entity], raising=False
+    )
+
+    restored = asyncio.run(module.async_restore_entities(None, "e1", {"charge_current"}))
+
+    assert restored == 0
+    assert registry.entity_updates == []
+    assert registry.option_updates == []

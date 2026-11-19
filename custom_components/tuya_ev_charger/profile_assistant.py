@@ -14,6 +14,7 @@ from typing import Any
 from .const import (
     CHARGER_PROFILE_DEPOW_V2,
     CHARGER_PROFILE_FEYREE_V1,
+    CHARGER_PROFILE_QCCDZ_DP6_V1,
     CHARGER_PROFILE_QCCDZ_V1,
     DP_CHARGER_INFO,
     DP_CURRENT_TARGET,
@@ -23,9 +24,11 @@ from .const import (
     FEYREE_DP_CURRENT_TARGET,
     FEYREE_DP_DO_CHARGE,
     FEYREE_DP_STATUS,
+    QCCDZ_DP6_WORK_STATE,
     QCCDZ_DP_CONNECTION_STATE,
     QCCDZ_DP_CURRENT_TARGET,
     QCCDZ_DP_SWITCH,
+    QCCDZ_DP_SYSTEM_VERSION,
 )
 from .option_values import coerce_optional_bool, coerce_optional_int
 from .tuya_ev_charger import TuyaEVChargerClient
@@ -75,6 +78,27 @@ def suggest_profile(dps: dict[str, Any]) -> str:
     }
     if known_depows.issubset(present):
         return CHARGER_PROFILE_DEPOW_V2
+    # This qccdz firmware uses DP 3 for its state and DP 6 for asynchronous
+    # metering. DP 6 is deliberately not required here because it is absent from
+    # the initial status response and only arrives on the persistent LAN stream.
+    dp6_states = {
+        "charger_free",
+        "charger_insert",
+        "charger_free_fault",
+        "charger_wait",
+        "charger_charging",
+        "charger_pause",
+        "charger_end",
+        "charger_fault",
+    }
+    if {
+        QCCDZ_DP6_WORK_STATE,
+        QCCDZ_DP_CURRENT_TARGET,
+        QCCDZ_DP_SWITCH,
+        QCCDZ_DP_SYSTEM_VERSION,
+    }.issubset(present) and str(dps[QCCDZ_DP6_WORK_STATE]).strip().lower() in dp6_states:
+        return CHARGER_PROFILE_QCCDZ_DP6_V1
+
     # Tuya's standard `qccdz` layout: pilot state, switch and setpoint, and no
     # DP 102 blob (#46). DP 13 is checked by value: the number alone is generic.
     known_qccdz = {QCCDZ_DP_CONNECTION_STATE, QCCDZ_DP_SWITCH, QCCDZ_DP_CURRENT_TARGET}

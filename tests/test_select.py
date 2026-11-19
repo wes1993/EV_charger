@@ -169,3 +169,74 @@ def test_selecting_a_new_profile_rewrites_the_entry_with_its_preset():
     assert written["surplus_profile"] == "eco"
     # The preset's thresholds must have been applied, not just the name.
     assert "surplus_start_threshold_w" in written
+
+
+# --- qccdz DP6 discrete current presets -----------------------------------
+
+
+class _CurrentClient:
+    dp_profile = "qccdz_dp6_v1"
+
+    def __init__(self):
+        self.calls = []
+
+    async def async_set_charge_current(self, amperage, max_current=None):
+        self.calls.append((amperage, max_current))
+        return True
+
+
+def _current_select(*, current=16, max_current=32, options=None):
+    from tuya_ev_charger.select import TuyaEVChargerCurrentSelect as S
+
+    refreshes = []
+
+    async def _refresh():
+        refreshes.append(True)
+
+    client = _CurrentClient()
+    entity = _make(
+        S,
+        _entry=types.SimpleNamespace(options=options or {}),
+        coordinator=types.SimpleNamespace(
+            data=types.SimpleNamespace(current_target=current, max_current_cfg=max_current),
+            async_request_refresh=_refresh,
+        ),
+        _runtime_data=types.SimpleNamespace(client=client),
+    )
+    entity.client = client
+    entity.refreshes = refreshes
+    return entity
+
+
+def test_qccdz_dp6_current_select_offers_only_supported_values():
+    entity = _current_select()
+
+    assert entity.options == ["6 A", "8 A", "10 A", "13 A", "16 A", "20 A", "24 A", "32 A"]
+    assert entity.current_option == "16 A"
+
+
+def test_qccdz_dp6_current_select_writes_a_supported_value():
+    entity = _current_select(current=13)
+
+    asyncio.run(entity.async_select_option("16 A"))
+
+    assert entity.client.calls == [(16, 32)]
+    assert entity.refreshes == [True]
+
+
+def test_qccdz_dp6_current_select_rejects_unsupported_value():
+    from homeassistant.exceptions import HomeAssistantError
+
+    entity = _current_select()
+
+    with pytest.raises(HomeAssistantError, match="unsupported_current"):
+        asyncio.run(entity.async_select_option("15 A"))
+
+    assert entity.client.calls == []
+    assert entity.refreshes == []
+
+
+def test_qccdz_dp6_current_select_respects_installation_ceiling():
+    entity = _current_select(options={"max_charge_current_a": 25})
+
+    assert entity.options == ["6 A", "8 A", "10 A", "13 A", "16 A", "20 A", "24 A"]

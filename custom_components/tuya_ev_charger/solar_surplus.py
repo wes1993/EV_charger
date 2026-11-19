@@ -404,7 +404,11 @@ class SolarSurplusController:
         the 2.13.1 fix expressed as a property of the data rather than as an
         ordering to be remembered.
         """
-        available_currents = allowed_currents(data, self._entry.options)
+        available_currents = allowed_currents(
+            data,
+            self._entry.options,
+            charger_profile=self._client.dp_profile,
+        )
         protection_cap, cap_source = self._caps.protection_cap(data, available_currents)
         if protection_cap is not None:
             available_currents = tuple(

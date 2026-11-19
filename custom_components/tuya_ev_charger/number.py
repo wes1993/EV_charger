@@ -19,6 +19,7 @@ from .const import (
     ALLOWED_CURRENTS,
     CARD_ROLE_CHARGE_CURRENT,
     CARD_ROLE_INDEX,
+    CHARGER_PROFILE_QCCDZ_DP6_V1,
     CARD_ROLE_SURPLUS_START_THRESHOLD,
     CARD_ROLE_SURPLUS_STOP_THRESHOLD,
     CONF_SURPLUS_BATTERY_SOC_HIGH_THRESHOLD_PCT,
@@ -137,7 +138,11 @@ async def async_setup_entry(
 ) -> None:
     _ = hass
     runtime_data: TuyaEVChargerRuntimeData = entry.runtime_data
-    entities: list[NumberEntity] = [TuyaEVChargerCurrentNumber(entry, runtime_data)]
+    entities: list[NumberEntity] = []
+    # The DP6 firmware has irregular current presets that a NumberEntity slider
+    # cannot represent; its current control is exposed by the select platform.
+    if getattr(runtime_data.client, "dp_profile", None) != CHARGER_PROFILE_QCCDZ_DP6_V1:
+        entities.append(TuyaEVChargerCurrentNumber(entry, runtime_data))
     entities.extend(
         TuyaEVChargerSurplusOptionNumber(entry, runtime_data, description)
         for description in SURPLUS_OPTION_NUMBER_DESCRIPTIONS
@@ -201,7 +206,11 @@ class TuyaEVChargerCurrentNumber(TuyaEVChargerEntity, NumberEntity):
         await self.coordinator.async_request_refresh()
 
     def _allowed_currents(self) -> tuple[int, ...]:
-        return allowed_currents(self.coordinator.data, self._entry.options)
+        return allowed_currents(
+            self.coordinator.data,
+            self._entry.options,
+            charger_profile=getattr(self._runtime_data.client, "dp_profile", None),
+        )
 
 
 class TuyaEVChargerSurplusOptionNumber(TuyaEVChargerEntity, NumberEntity):

@@ -15,15 +15,19 @@ from .charger_metrics import (
     EVMetrics,
     decode_feyree_metrics,
     decode_metrics,
+    decode_qccdz_dp6_metrics,
     decode_qccdz_metrics,
     values_match,
 )
 from .const import (
     ALLOWED_CURRENTS,
     CHARGER_PROFILE_FEYREE_V1,
+    CHARGER_PROFILE_QCCDZ_DP6_V1,
     CHARGER_PROFILE_QCCDZ_V1,
     DEFAULT_CHARGER_PROFILE,
     DEFAULT_CHARGER_PROFILE_JSON,
+    QCCDZ_DP6_ALLOWED_CURRENTS,
+    QCCDZ_DP6_MAX_CURRENT_A,
     QCCDZ_MAX_CURRENT_A,
     TUYA_CONTROL_PORT,
     ConnectionFault,
@@ -49,6 +53,8 @@ SOCKET_RETRY_DELAY_S = 1
 # thread stuck inside tinytuya cannot hold the I/O lock, and with it every poll
 # and command, forever.
 IO_TIMEOUT_S = 20
+QCCDZ_DP6_RECEIVE_TIMEOUT_S = 1.0
+QCCDZ_DP6_HEARTBEAT_INTERVAL_S = 12.0
 
 
 def _configure_device(device: tinytuya.Device) -> None:
@@ -90,6 +96,8 @@ class TuyaEVChargerClient:
         self._io_lock = asyncio.Lock()
         # Set when a stuck call made us drop the socket; the next access rebuilds it.
         self._needs_reconnect = False
+        self._dp6_listener_task: asyncio.Task[None] | None = None
+        self._dp6_listener_stop = asyncio.Event()
 
     @property
     def device_id(self) -> str:
@@ -112,8 +120,10 @@ class TuyaEVChargerClient:
         return bool(getattr(self._dp, field, ""))
 
     async def async_connect(self) -> None:
+        await self._async_stop_dp6_listener()
         async with self._io_lock:
             self._build_device()
+        self._async_start_dp6_listener()
 
     def _build_device(self) -> tinytuya.Device:
         """Replace the current Device with a fresh one. Call with the I/O lock held."""
@@ -128,6 +138,12 @@ class TuyaEVChargerClient:
             version=self._protocol_version,
         )
         _configure_device(device)
+        if self._dp_profile == CHARGER_PROFILE_QCCDZ_DP6_V1:
+            # This firmware pushes DP 6 asynchronously. Keep one persistent
+            # socket so the listener can receive those frames while status and
+            # commands are still serialized through _io_lock.
+            device.set_socketPersistent(True)
+            device.set_socketTimeout(QCCDZ_DP6_RECEIVE_TIMEOUT_S)
         self._device = device
         self._needs_reconnect = False
         return device
@@ -156,6 +172,54 @@ class TuyaEVChargerClient:
                 except OSError as err:
                     LOGGER.debug("Closing the stuck connection failed: %s", err)
             raise
+
+    def _async_start_dp6_listener(self) -> None:
+        if self._dp_profile != CHARGER_PROFILE_QCCDZ_DP6_V1:
+            return
+        if self._dp6_listener_task is not None and not self._dp6_listener_task.done():
+            return
+        self._dp6_listener_stop.clear()
+        self._dp6_listener_task = asyncio.create_task(
+            self._async_dp6_receive_loop(),
+            name=f"{self._device_id}_dp6_listener",
+        )
+
+    async def _async_stop_dp6_listener(self) -> None:
+        task = self._dp6_listener_task
+        if task is None:
+            return
+        self._dp6_listener_stop.set()
+        try:
+            # receive() uses the short DP6 socket timeout, so this normally
+            # returns within one second without cancelling a worker thread.
+            await task
+        except asyncio.CancelledError:
+            raise
+        except Exception as err:  # noqa: BLE001 - listener is best effort
+            LOGGER.debug("DP6 listener stopped with an error: %s", err)
+        finally:
+            self._dp6_listener_task = None
+            self._dp6_listener_stop = asyncio.Event()
+
+    async def _async_dp6_receive_loop(self) -> None:
+        """Receive unsolicited DP6 frames on the charger's persistent socket."""
+        last_heartbeat = time.monotonic()
+        while not self._dp6_listener_stop.is_set():
+            try:
+                async with self._io_lock:
+                    if self._dp6_listener_stop.is_set():
+                        break
+                    device = self._get_device()
+                    await self._async_in_thread(device.receive)
+                    now = time.monotonic()
+                    if now - last_heartbeat >= QCCDZ_DP6_HEARTBEAT_INTERVAL_S:
+                        await self._async_in_thread(device.heartbeat, True)
+                        last_heartbeat = now
+            except asyncio.CancelledError:
+                raise
+            except Exception as err:  # noqa: BLE001 - keep telemetry alive after a transient socket error
+                LOGGER.debug("DP6 asynchronous receive failed: %s", err)
+                await asyncio.sleep(0.1)
 
     async def async_update_host(self, host: str) -> None:
         """Point the client at a new IP (after a DHCP change) and reconnect."""
@@ -219,6 +283,7 @@ class TuyaEVChargerClient:
         on unload/reload leaves a zombie socket that makes the device refuse
         every later connection (including our own next instance).
         """
+        await self._async_stop_dp6_listener()
         async with self._io_lock:
             if self._device is not None:
                 device, self._device = self._device, None
@@ -240,6 +305,13 @@ class TuyaEVChargerClient:
         closed afterwards so the probe never holds the charger's single local
         connection slot, and the live client is left untouched.
         """
+
+        # A DP6 charger keeps one persistent local socket for unsolicited
+        # telemetry. Release that slot before opening the throwaway probe socket,
+        # otherwise the charger may reject the probe as a second connection.
+        persistent_profile = self._dp_profile == CHARGER_PROFILE_QCCDZ_DP6_V1
+        if persistent_profile:
+            await self.async_close()
 
         def _probe() -> bool:
             device = tinytuya.Device(
@@ -267,19 +339,34 @@ class TuyaEVChargerClient:
                 return await asyncio.to_thread(_probe)
         except TimeoutError:
             return False
+        finally:
+            if persistent_profile:
+                await self.async_connect()
 
     async def async_set_charge_current(self, amperage: int, max_current: int | None = None) -> bool:
-        upper = max(ALLOWED_CURRENTS)
-        if max_current is not None:
-            # Respect the charger's own hardware limit (DP 152) on top of the
-            # range the integration supports.
-            upper = min(upper, max_current)
-        if amperage < min(ALLOWED_CURRENTS) or amperage > upper:
-            raise ValueError(
-                f"Current setpoint {amperage}A is out of supported range "
-                f"({min(ALLOWED_CURRENTS)}-{upper}A)."
-            )
+        if self._dp_profile == CHARGER_PROFILE_QCCDZ_DP6_V1:
+            # DP 4 accepts only the charger's non-uniform preset ladder.
+            upper = QCCDZ_DP6_MAX_CURRENT_A
+            if max_current is not None:
+                upper = min(upper, max_current)
+            allowed = tuple(value for value in QCCDZ_DP6_ALLOWED_CURRENTS if value <= upper)
+            if amperage not in allowed:
+                raise ValueError(
+                    f"Current setpoint {amperage}A is not one of the supported values {allowed}."
+                )
+        else:
+            lower = min(ALLOWED_CURRENTS)
+            upper = max(ALLOWED_CURRENTS)
+            if max_current is not None:
+                # Respect the charger's own hardware limit (DP 152) on top of the
+                # range the integration supports.
+                upper = min(upper, max_current)
+            if amperage < lower or amperage > upper:
+                raise ValueError(
+                    f"Current setpoint {amperage}A is out of supported range ({lower}-{upper}A)."
+                )
         return await self._async_send_command(self._dp.current_target, amperage)
+
 
     async def async_set_charge_enabled(self, enabled: bool) -> bool:
         if self._dp_profile == CHARGER_PROFILE_QCCDZ_V1:
@@ -331,8 +418,19 @@ class TuyaEVChargerClient:
     async def async_get_metrics(self) -> EVMetrics | None:
         async with self._io_lock:
             dps = await self._async_get_dps_payload()
+            if dps is not None and self._dp_profile == CHARGER_PROFILE_QCCDZ_DP6_V1:
+                # TinyTuya merges unsolicited receive() payloads into its
+                # persistent cache. Use that merged view so the normal status
+                # response and the latest DP 6 frame are decoded together.
+                cached = self._get_device().cached_status(nowait=True)
+                if isinstance(cached, dict) and isinstance(cached.get("dps"), dict):
+                    dps = cached["dps"]
         if dps is None:
             return None
+        if self._dp_profile == CHARGER_PROFILE_QCCDZ_DP6_V1:
+            return decode_qccdz_dp6_metrics(
+                dps, self._dp, self._max_current_a or QCCDZ_DP6_MAX_CURRENT_A
+            )
         if self._dp_profile == CHARGER_PROFILE_QCCDZ_V1:
             metrics = decode_qccdz_metrics(
                 dps, self._dp, self._max_current_a or QCCDZ_MAX_CURRENT_A

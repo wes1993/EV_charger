@@ -239,6 +239,9 @@ CHARGER_PROFILE_GENERIC_V1 = "generic_v1"
 # Firmwares built on Tuya's standard EV charger category (`qccdz`), with scalar
 # DPs instead of the DP 102 JSON blob -- dé portable 3.5/3.7 kW on 1.1.25+ (#46).
 CHARGER_PROFILE_QCCDZ_V1 = "qccdz_v1"
+# Same Tuya category, but a firmware that reports actual V/A/W together in an
+# asynchronous Base64 DP 6 frame and uses DP 3 for its state (#new).
+CHARGER_PROFILE_QCCDZ_DP6_V1 = "qccdz_dp6_v1"
 # Feyree portable chargers (Tuya category `qccdz`, product id ebdm8ax35pgodi2s):
 # scalar per-phase DPs in the 101-125 range instead of the DP 102 blob (#98).
 CHARGER_PROFILE_FEYREE_V1 = "feyree_v1"
@@ -248,6 +251,7 @@ CHARGER_PROFILES: tuple[str, ...] = (
     CHARGER_PROFILE_DEPOW_V2,
     CHARGER_PROFILE_GENERIC_V1,
     CHARGER_PROFILE_QCCDZ_V1,
+    CHARGER_PROFILE_QCCDZ_DP6_V1,
     CHARGER_PROFILE_FEYREE_V1,
 )
 
@@ -500,6 +504,14 @@ QCCDZ_DP_SESSION_START = "54"  # charge_start_moment, Unix timestamp as a string
 QCCDZ_DP_POWER = "48"  # charge_power, 0.1 kW
 QCCDZ_DP_CURRENT = "49"  # charge_current, 0.1 A
 QCCDZ_DP_VOLTAGE = "50"  # charge_voltage, 0.1 V
+# Another qccdz firmware: DP 6 is an 8-byte Base64 frame (0.1 V, mA, W),
+# delivered asynchronously over the persistent LAN connection; DP 3 is its state.
+QCCDZ_DP6_METRICS = "6"
+QCCDZ_DP6_WORK_STATE = "3"
+# DP 4 accepts only these discrete setpoints; installation limits can narrow
+# the list further, but must never introduce intermediate values.
+QCCDZ_DP6_ALLOWED_CURRENTS: tuple[int, ...] = (6, 8, 10, 13, 16, 20, 24, 32)
+QCCDZ_DP6_MAX_CURRENT_A = 32
 # Upper bound of charge_cur_set in the Thing Model; there is no DP 152 equivalent.
 # The default only: a non-zero `max_charge_current_a` replaces it, which is how a
 # 32 A unit on this layout gets past 16 A.
