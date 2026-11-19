@@ -19,6 +19,7 @@ from .const import (
     CHARGER_PROFILE_FEYREE_V1,
     CHARGER_PROFILE_GENERIC_V1,
     CHARGER_PROFILE_QCCDZ_V1,
+    CHARGER_PROFILE_QCCDZ_DP6_V1,
     CHARGER_PROFILES,
     DEFAULT_CHARGER_PROFILE,
     DP_ADJUST_CURRENT,
@@ -45,6 +46,9 @@ from .const import (
     FEYREE_DP_MAX_CURRENT_CFG,
     FEYREE_DP_STATUS,
     QCCDZ_DP_CHARGE_DISCHARGE,
+    QCCDZ_DP6_CURRENT_TARGET,
+    QCCDZ_DP6_WORK_STATE,
+    QCCDZ_DP6_FAULT,
     QCCDZ_DP_CURRENT_TARGET,
     QCCDZ_DP_EVSE_STATE,
     QCCDZ_DP_FAULT,
@@ -144,6 +148,29 @@ DP_PROFILE_MAP: dict[str, DPProfile] = {
     # Feyree portable chargers: scalar per-phase DPs, decoded by
     # `decode_feyree_metrics` (#98). DP 124 is a transient command enum, so the
     # charge state comes from DP 101, not from do_charge.
+    # QCCDZ firmware variant with DP 3 state and asynchronous DP 6 V/A/W frames.
+    # This profile deliberately leaves charge control unmapped: DP 18 is a generic
+    # switch on this firmware and has not been verified as a start/stop command.
+    CHARGER_PROFILE_QCCDZ_DP6_V1: DPProfile(
+        metrics="",
+        charger_info="",
+        work_state="",
+        work_state_debug=QCCDZ_DP6_WORK_STATE,
+        do_charge="",
+        current_target=QCCDZ_DP6_CURRENT_TARGET,
+        max_current_cfg="",
+        nfc_cfg="",
+        downcounter="",
+        selftest="",
+        alarm=QCCDZ_DP6_FAULT,
+        charge_history="",
+        adjust_current="",
+        product_variant="",
+        dp_num="",
+        reboot="",
+        plug_in_action="",
+        schedule="",
+    ),
     CHARGER_PROFILE_FEYREE_V1: DPProfile(
         metrics="",
         charger_info="",
