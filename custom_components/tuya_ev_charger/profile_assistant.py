@@ -14,8 +14,8 @@ from typing import Any
 from .const import (
     CHARGER_PROFILE_DEPOW_V2,
     CHARGER_PROFILE_FEYREE_V1,
-    CHARGER_PROFILE_QCCDZ_V1,
     CHARGER_PROFILE_QCCDZ_DP6_V1,
+    CHARGER_PROFILE_QCCDZ_V1,
     DP_CHARGER_INFO,
     DP_CURRENT_TARGET,
     DP_DO_CHARGE,
@@ -24,11 +24,11 @@ from .const import (
     FEYREE_DP_CURRENT_TARGET,
     FEYREE_DP_DO_CHARGE,
     FEYREE_DP_STATUS,
-    QCCDZ_DP_CONNECTION_STATE,
-    QCCDZ_DP_SYSTEM_VERSION,
     QCCDZ_DP6_WORK_STATE,
+    QCCDZ_DP_CONNECTION_STATE,
     QCCDZ_DP_CURRENT_TARGET,
     QCCDZ_DP_SWITCH,
+    QCCDZ_DP_SYSTEM_VERSION,
 )
 from .option_values import coerce_optional_bool, coerce_optional_int
 from .tuya_ev_charger import TuyaEVChargerClient
