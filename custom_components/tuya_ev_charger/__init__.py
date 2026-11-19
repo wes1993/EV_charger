@@ -24,6 +24,7 @@ from . import controller_state
 from .const import (
     ADVANCED_ENTITY_KEYS,
     CHARGER_PROFILES,
+    CHARGER_PROFILE_QCCDZ_DP6_V1,
     CONF_CHARGER_PROFILE,
     CONF_CHARGER_PROFILE_JSON,
     CONF_DEVICE_ID,
@@ -53,6 +54,7 @@ from .const import (
 from .coordinator import TuyaEVChargerDataUpdateCoordinator
 from .entity_cleanup import (
     async_disable_entities,
+    async_restore_entities,
     is_already_handled,
     missing_dp_entity_keys,
     unavailable_capability_keys,
@@ -355,6 +357,25 @@ async def _async_tidy_entities(
         | missing_dp_entity_keys(coordinator.client.has_dp),
         reason="this charger does not expose",
     )
+
+    # This firmware exposes a discrete current ladder: use a select instead of
+    # the generic number slider, and switch the registry entries with the profile.
+    if coordinator.client.dp_profile == CHARGER_PROFILE_QCCDZ_DP6_V1:
+        await async_disable_entities(
+            hass,
+            entry.entry_id,
+            {"charge_current"},
+            reason="this firmware requires discrete current presets",
+        )
+        await async_restore_entities(hass, entry.entry_id, {"charge_current_select"})
+    else:
+        await async_disable_entities(
+            hass,
+            entry.entry_id,
+            {"charge_current_select"},
+            reason="this charger profile uses a numeric current control",
+        )
+        await async_restore_entities(hass, entry.entry_id, {"charge_current"})
 
     registry = er.async_get(hass)
     pending = len(

@@ -18,6 +18,7 @@ from homeassistant.helpers import selector
 
 from .const import (
     CHARGER_PROFILE_CUSTOM_JSON,
+    CHARGER_PROFILE_QCCDZ_DP6_V1,
     CHARGER_PROFILES,
     CONF_CAP_ONLY_REGULATION,
     CONF_CHARGER_PROFILE,
@@ -483,8 +484,22 @@ class TuyaEVChargerOptionsFlow(config_entries.OptionsFlow):
         keep the flat shape every reader expects and no migration is needed.
         """
         schema: dict[Any, Any] = {}
+        profile = str(
+            options.get(
+                CONF_CHARGER_PROFILE,
+                self._config_entry.data.get(CONF_CHARGER_PROFILE, DEFAULT_CHARGER_PROFILE),
+            )
+        ).strip().lower()
         for name in _SECTION_ORDER:
-            rows = tuple(opt for opt in _OPTIONS_FORM if opt.section == name)
+            rows = tuple(
+                opt
+                for opt in _OPTIONS_FORM
+                if opt.section == name
+                and not (
+                    profile == CHARGER_PROFILE_QCCDZ_DP6_V1
+                    and opt.key == CONF_CONTINUOUS_CURRENT
+                )
+            )
             if not rows:
                 continue
             schema[vol.Required(name)] = section(

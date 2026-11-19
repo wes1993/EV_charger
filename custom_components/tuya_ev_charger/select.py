@@ -9,8 +9,10 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from . import TuyaEVChargerRuntimeData
 from .charger_metrics import PLUG_IN_ACTION_OPTIONS
 from .const import (
+    CARD_ROLE_CHARGE_CURRENT,
     CARD_ROLE_INDEX,
     CARD_ROLE_SURPLUS_PROFILE,
+    CHARGER_PROFILE_QCCDZ_DP6_V1,
     CONF_SURPLUS_PROFILE,
     CONF_VEHICLES,
     DEFAULT_SURPLUS_PROFILE,
@@ -19,6 +21,7 @@ from .const import (
 )
 from .entity import TuyaEVChargerEntity
 from .errors import charger_error
+from .helpers import allowed_currents
 from .surplus_profiles import apply_surplus_profile, normalize_surplus_profile
 from .vehicles import configured_vehicles
 
@@ -36,11 +39,68 @@ async def async_setup_entry(
         TuyaEVChargerSurplusProfileSelect(entry, runtime_data),
         TuyaEVChargerPlugInActionSelect(entry, runtime_data),
     ]
+    if runtime_data.client.dp_profile == CHARGER_PROFILE_QCCDZ_DP6_V1:
+        entities.append(TuyaEVChargerCurrentSelect(entry, runtime_data))
 
     # Only offer the vehicle picker once the user has named their vehicles.
     if configured_vehicles(entry.options.get(CONF_VEHICLES, DEFAULT_VEHICLES)):
         entities.append(TuyaEVChargerVehicleSelect(entry, runtime_data))
     async_add_entities(entities)
+
+
+class TuyaEVChargerCurrentSelect(TuyaEVChargerEntity, SelectEntity):
+    """The DP6 charger's discrete current presets."""
+
+    _attr_translation_key = "charge_current"
+
+    def __init__(self, entry: ConfigEntry, runtime_data: TuyaEVChargerRuntimeData) -> None:
+        super().__init__(
+            entry=entry,
+            runtime_data=runtime_data,
+            card_role=CARD_ROLE_CHARGE_CURRENT,
+            card_index=CARD_ROLE_INDEX[CARD_ROLE_CHARGE_CURRENT],
+        )
+        self._attr_unique_id = f"{runtime_data.client.device_id}_charge_current_select"
+
+    @property
+    def options(self) -> list[str]:
+        return [f"{value} A" for value in self._allowed_currents()]
+
+    @property
+    def current_option(self) -> str | None:
+        data = self.coordinator.data
+        if data is None or data.current_target is None:
+            return None
+        option = f"{data.current_target} A"
+        return option if option in self.options else None
+
+    async def async_select_option(self, option: str) -> None:
+        if option not in self.options:
+            raise charger_error(
+                "unsupported_current",
+                amperage=option,
+                allowed=self._allowed_currents(),
+            )
+
+        amperage = int(option.removesuffix(" A"))
+        data = self.coordinator.data
+        if data is not None and data.current_target == amperage:
+            return
+
+        success = await self._runtime_data.client.async_set_charge_current(
+            amperage,
+            max_current=data.max_current_cfg if data is not None else None,
+        )
+        if not success:
+            raise charger_error("set_current_failed")
+        await self.coordinator.async_request_refresh()
+
+    def _allowed_currents(self) -> tuple[int, ...]:
+        return allowed_currents(
+            self.coordinator.data,
+            self._entry.options,
+            charger_profile=self._runtime_data.client.dp_profile,
+        )
 
 
 class TuyaEVChargerPlugInActionSelect(TuyaEVChargerEntity, SelectEntity):

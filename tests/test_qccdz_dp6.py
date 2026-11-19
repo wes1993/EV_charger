@@ -124,7 +124,8 @@ def test_dp6_profile_does_not_expose_unverified_charge_command():
     assert client._device.set_calls == []
 
 
-def test_dp6_profile_accepts_one_amp_steps():
+@pytest.mark.parametrize("amperage", [6, 8, 10, 13, 16, 20, 24, 32])
+def test_dp6_profile_accepts_only_supported_presets(amperage):
     client = _client(CHARGING)
     calls = []
 
@@ -134,8 +135,16 @@ def test_dp6_profile_accepts_one_amp_steps():
 
     client._async_send_command = _send
 
-    assert asyncio.run(client.async_set_charge_current(14)) is True
-    assert calls == [("4", 14, True)]
+    assert asyncio.run(client.async_set_charge_current(amperage)) is True
+    assert calls == [("4", amperage, True)]
+
+
+@pytest.mark.parametrize("amperage", [7, 9, 11, 14, 15, 17, 19, 21, 23, 25, 31])
+def test_dp6_profile_rejects_unsupported_presets(amperage):
+    client = _client(CHARGING)
+
+    with pytest.raises(ValueError, match="supported values"):
+        asyncio.run(client.async_set_charge_current(amperage))
 
 
 def test_dp6_profile_rejects_above_32a():

@@ -510,6 +510,7 @@ QCCDZ_DP6_METRICS = "6"
 QCCDZ_DP6_WORK_STATE = "3"
 # The Thing Model exposes a 1 A step setpoint; 32 A is the supported ceiling
 # for this profile, and the integration's installation limit can lower it.
+QCCDZ_DP6_ALLOWED_CURRENTS: tuple[int, ...] = (6, 8, 10, 13, 16, 20, 24, 32)
 QCCDZ_DP6_MAX_CURRENT_A = 32
 # Upper bound of charge_cur_set in the Thing Model; there is no DP 152 equivalent.
 # The default only: a non-zero `max_charge_current_a` replaces it, which is how a

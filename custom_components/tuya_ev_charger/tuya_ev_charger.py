@@ -26,6 +26,7 @@ from .const import (
     CHARGER_PROFILE_QCCDZ_V1,
     DEFAULT_CHARGER_PROFILE,
     DEFAULT_CHARGER_PROFILE_JSON,
+    QCCDZ_DP6_ALLOWED_CURRENTS,
     QCCDZ_DP6_MAX_CURRENT_A,
     QCCDZ_MAX_CURRENT_A,
     TUYA_CONTROL_PORT,
@@ -343,21 +344,29 @@ class TuyaEVChargerClient:
                 await self.async_connect()
 
     async def async_set_charge_current(self, amperage: int, max_current: int | None = None) -> bool:
-        lower = min(ALLOWED_CURRENTS)
-        upper = max(ALLOWED_CURRENTS)
         if self._dp_profile == CHARGER_PROFILE_QCCDZ_DP6_V1:
-            # DP 4 is a true 1 A step setpoint on this firmware, unlike the
-            # legacy qccdz quick-select ladder in ALLOWED_CURRENTS.
+            # DP 4 accepts only the charger's non-uniform preset ladder.
             upper = QCCDZ_DP6_MAX_CURRENT_A
-        if max_current is not None:
-            # Respect the charger's own hardware limit (DP 152) on top of the
-            # range the integration supports.
-            upper = min(upper, max_current)
-        if amperage < lower or amperage > upper:
-            raise ValueError(
-                f"Current setpoint {amperage}A is out of supported range ({lower}-{upper}A)."
-            )
+            if max_current is not None:
+                upper = min(upper, max_current)
+            allowed = tuple(value for value in QCCDZ_DP6_ALLOWED_CURRENTS if value <= upper)
+            if amperage not in allowed:
+                raise ValueError(
+                    f"Current setpoint {amperage}A is not one of the supported values {allowed}."
+                )
+        else:
+            lower = min(ALLOWED_CURRENTS)
+            upper = max(ALLOWED_CURRENTS)
+            if max_current is not None:
+                # Respect the charger's own hardware limit (DP 152) on top of the
+                # range the integration supports.
+                upper = min(upper, max_current)
+            if amperage < lower or amperage > upper:
+                raise ValueError(
+                    f"Current setpoint {amperage}A is out of supported range ({lower}-{upper}A)."
+                )
         return await self._async_send_command(self._dp.current_target, amperage)
+
 
     async def async_set_charge_enabled(self, enabled: bool) -> bool:
         if self._dp_profile == CHARGER_PROFILE_QCCDZ_V1:

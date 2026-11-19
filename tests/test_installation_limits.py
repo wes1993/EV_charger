@@ -21,10 +21,14 @@ class _Metrics:
         self.adjust_current_options = adjust_current_options or []
 
 
-def _currents(options=None, **metrics):
+def _currents(options=None, *, charger_profile=None, **metrics):
     from tuya_ev_charger.helpers import allowed_currents
 
-    return allowed_currents(_Metrics(**metrics), options or {})
+    return allowed_currents(
+        _Metrics(**metrics),
+        options or {},
+        charger_profile=charger_profile,
+    )
 
 
 def test_without_a_limit_the_full_range_is_offered():
@@ -80,6 +84,32 @@ def test_limits_apply_to_the_discrete_ladder_too():
         adjust_current_options=[6, 8, 10, 13, 16],
     )
     assert limited == (6, 8, 10, 13)
+
+
+def test_qccdz_dp6_uses_only_its_supported_presets():
+    expected = (6, 8, 10, 13, 16, 20, 24, 32)
+    assert _currents(charger_profile="qccdz_dp6_v1") == expected
+    assert _currents(
+        {"continuous_current": True},
+        charger_profile="qccdz_dp6_v1",
+    ) == expected
+
+
+def test_qccdz_dp6_installation_ceiling_filters_to_the_next_supported_preset():
+    limited = _currents(
+        {"max_charge_current_a": 25},
+        charger_profile="qccdz_dp6_v1",
+    )
+    assert limited == (6, 8, 10, 13, 16, 20, 24)
+    assert 25 not in limited
+
+
+def test_qccdz_dp6_installation_floor_and_ceiling_filter_presets():
+    limited = _currents(
+        {"min_charge_current_a": 13, "max_charge_current_a": 25},
+        charger_profile="qccdz_dp6_v1",
+    )
+    assert limited == (13, 16, 20, 24)
 
 
 def test_the_surplus_regulator_cannot_exceed_the_limit():

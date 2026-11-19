@@ -6,18 +6,33 @@ from typing import Any
 from .charger_metrics import EVMetrics
 from .const import (
     ALLOWED_CURRENTS,
+    CHARGER_PROFILE_QCCDZ_DP6_V1,
     CONF_CONTINUOUS_CURRENT,
     CONF_MAX_CHARGE_CURRENT_A,
     CONF_MIN_CHARGE_CURRENT_A,
     DEFAULT_CONTINUOUS_CURRENT,
     DEFAULT_MAX_CHARGE_CURRENT_A,
     DEFAULT_MIN_CHARGE_CURRENT_A,
+    QCCDZ_DP6_ALLOWED_CURRENTS,
+    QCCDZ_DP6_MAX_CURRENT_A,
 )
 
 
 def allowed_currents(
-    data: EVMetrics | None, options: Mapping[str, Any] | None = None
+    data: EVMetrics | None,
+    options: Mapping[str, Any] | None = None,
+    *,
+    charger_profile: str | None = None,
 ) -> tuple[int, ...]:
+    # This firmware accepts only a fixed, non-uniform set of DP 4 presets.
+    # Ignore its generic 1 A mode and preserve the exact ladder for every path.
+    if charger_profile == CHARGER_PROFILE_QCCDZ_DP6_V1:
+        max_current = QCCDZ_DP6_MAX_CURRENT_A
+        if data is not None and data.max_current_cfg is not None:
+            max_current = min(max_current, data.max_current_cfg)
+        currents = tuple(value for value in QCCDZ_DP6_ALLOWED_CURRENTS if value <= max_current)
+        return _apply_installation_limits(currents or (min(QCCDZ_DP6_ALLOWED_CURRENTS),), options)
+
     min_current = min(ALLOWED_CURRENTS)
     max_current = max(ALLOWED_CURRENTS)
 
