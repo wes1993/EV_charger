@@ -17,7 +17,7 @@
       },
       "cloud": {
         "title": "Tuya Cloud credentials",
-        "description": "From iot.tuya.com: create a Cloud project, link your Smart Life account, then paste the Access ID and Access Secret here. Used only to read your device list (device_id + local key) — never for telemetry.",
+        "description": "From iot.tuya.com: create a Cloud project, link your Smart Life account, then paste the Access ID and Access Secret here. Used only to read your device list (device_id + local key) \u2014 never for telemetry.",
         "data": {
           "cloud_api_key": "Access ID (API key)",
           "cloud_api_secret": "Access Secret",
@@ -233,25 +233,25 @@
           "protection_hold": "Holding the current: a protection limit just reduced it",
           "adjust_current": "Adjusting the current to the surplus",
           "battery_hold_charging": "Holding the scheduled current from the house battery",
-          "battery_floor_off_peak_charging": "Charging from the grid during off-peak hours — house battery is at its floor",
-          "battery_floor_off_peak_start": "House battery at its floor — starting a grid charge inside the off-peak window",
+          "battery_floor_off_peak_charging": "Charging from the grid during off-peak hours \u2014 house battery is at its floor",
+          "battery_floor_off_peak_start": "House battery at its floor \u2014 starting a grid charge inside the off-peak window",
           "battery_soc_below_threshold": "Waiting: the house battery is too low",
           "below_start_threshold": "Surplus below the start threshold",
           "below_stop_threshold": "Stopped: surplus below the stop threshold",
-          "evaluation_exception": "Evaluation failed — see the log",
+          "evaluation_exception": "Evaluation failed \u2014 see the log",
           "external_charge_blocked": "Blocked: an external condition (e.g. a grid outage) is preventing charging",
           "failed_set_startup_current": "The charger refused the starting current",
           "failed_set_current": "The charger refused the current",
           "failed_start_charge": "The charger refused to start",
-          "force_charge_adjust_current": "Forced charge — setting the current",
-          "force_charge_failed_set_current": "Forced charge — the charger refused the current",
-          "force_charge_failed_start": "Forced charge — the charger refused to start",
+          "force_charge_adjust_current": "Forced charge \u2014 setting the current",
+          "force_charge_failed_set_current": "Forced charge \u2014 the charger refused the current",
+          "force_charge_failed_start": "Forced charge \u2014 the charger refused to start",
           "force_charge_holding": "Forced charge in progress",
           "force_charge_requested": "Forced charge requested",
           "force_charge_start": "Forced charge starting",
           "grid_sensor_unavailable": "The grid power sensor is unavailable",
           "holding_current": "Holding the current",
-          "holding_minimum_current": "Holding the minimum current — the surplus is too small, the difference comes from the grid",
+          "holding_minimum_current": "Holding the minimum current \u2014 the surplus is too small, the difference comes from the grid",
           "off_peak_charge_start": "Starting a grid charge in off-peak hours",
           "off_peak_charging": "Charging from the grid during off-peak hours",
           "restart_lock_active": "Waiting after a surplus stop before starting again",
@@ -273,9 +273,9 @@
           "session_limit_duration": "Stopped: session duration limit reached",
           "session_limit_end_time": "Stopped: session end time reached",
           "session_limit_energy": "Stopped: session energy limit reached",
-          "start_delay_pending": "About to start — waiting to confirm the surplus holds",
+          "start_delay_pending": "About to start \u2014 waiting to confirm the surplus holds",
           "startup": "Starting up",
-          "stop_delay_pending": "About to stop — waiting to confirm the surplus is gone",
+          "stop_delay_pending": "About to stop \u2014 waiting to confirm the surplus is gone",
           "surplus_paused": "Surplus regulation paused",
           "surplus_paused_active": "Surplus regulation is paused",
           "surplus_start": "Starting on solar surplus",
@@ -407,6 +407,9 @@
       }
     },
     "select": {
+      "charge_current": {
+        "name": "Charging current"
+      },
       "surplus_profile": {
         "name": "Surplus profile"
       },
@@ -420,16 +423,13 @@
           "charge": "Start charging",
           "idle": "Do nothing"
         }
-      },
-      "charge_current": {
-        "name": "Charging current"
       }
     }
   },
   "issues": {
     "connection_refused": {
       "title": "Charger refused the connection",
-      "description": "The charger at {host} is reachable but refuses its control port. These chargers accept a single local connection at a time — check that the Smart Life app or another Tuya integration is not holding it."
+      "description": "The charger at {host} is reachable but refuses its control port. These chargers accept a single local connection at a time \u2014 check that the Smart Life app or another Tuya integration is not holding it."
     },
     "tidy_entities": {
       "title": "Hide advanced entities",

@@ -39,7 +39,7 @@ async def async_setup_entry(
         TuyaEVChargerSurplusProfileSelect(entry, runtime_data),
         TuyaEVChargerPlugInActionSelect(entry, runtime_data),
     ]
-    if runtime_data.client.dp_profile == CHARGER_PROFILE_QCCDZ_DP6_V1:
+    if getattr(runtime_data.client, "dp_profile", None) == CHARGER_PROFILE_QCCDZ_DP6_V1:
         entities.append(TuyaEVChargerCurrentSelect(entry, runtime_data))
 
     # Only offer the vehicle picker once the user has named their vehicles.
@@ -99,7 +99,7 @@ class TuyaEVChargerCurrentSelect(TuyaEVChargerEntity, SelectEntity):
         return allowed_currents(
             self.coordinator.data,
             self._entry.options,
-            charger_profile=self._runtime_data.client.dp_profile,
+            charger_profile=getattr(self._runtime_data.client, "dp_profile", None),
         )
 
 

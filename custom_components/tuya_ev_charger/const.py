@@ -508,8 +508,8 @@ QCCDZ_DP_VOLTAGE = "50"  # charge_voltage, 0.1 V
 # delivered asynchronously over the persistent LAN connection; DP 3 is its state.
 QCCDZ_DP6_METRICS = "6"
 QCCDZ_DP6_WORK_STATE = "3"
-# The Thing Model exposes a 1 A step setpoint; 32 A is the supported ceiling
-# for this profile, and the integration's installation limit can lower it.
+# DP 4 accepts only these discrete setpoints; installation limits can narrow
+# the list further, but must never introduce intermediate values.
 QCCDZ_DP6_ALLOWED_CURRENTS: tuple[int, ...] = (6, 8, 10, 13, 16, 20, 24, 32)
 QCCDZ_DP6_MAX_CURRENT_A = 32
 # Upper bound of charge_cur_set in the Thing Model; there is no DP 152 equivalent.
