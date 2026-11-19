@@ -143,9 +143,6 @@ DP_PROFILE_MAP: dict[str, DPProfile] = {
         plug_in_action="",
         schedule="",
     ),
-    # Feyree portable chargers: scalar per-phase DPs, decoded by
-    # `decode_feyree_metrics` (#98). DP 124 is a transient command enum, so the
-    # charge state comes from DP 101, not from do_charge.
     # QCCDZ firmware variant with DP 3 state and asynchronous DP 6 V/A/W frames.
     # This profile deliberately leaves charge control unmapped: DP 18 is a generic
     # switch on this firmware and has not been verified as a start/stop command.
@@ -169,6 +166,9 @@ DP_PROFILE_MAP: dict[str, DPProfile] = {
         plug_in_action="",
         schedule="",
     ),
+    # Feyree portable chargers: scalar per-phase DPs, decoded by
+    # `decode_feyree_metrics` (#98). DP 124 is a transient command enum, so the
+    # charge state comes from DP 101, not from do_charge.
     CHARGER_PROFILE_FEYREE_V1: DPProfile(
         metrics="",
         charger_info="",
