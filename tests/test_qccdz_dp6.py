@@ -6,7 +6,6 @@ import asyncio
 
 import pytest
 
-
 CHARGING = {
     "1": 117,
     "3": "charger_charging",
@@ -35,19 +34,16 @@ IDLE = {
 }
 
 
-
 def _profile():
     from tuya_ev_charger.dp_profile import DP_PROFILE_MAP
 
     return DP_PROFILE_MAP["qccdz_dp6_v1"]
 
 
-
 def _decode(dps):
     from tuya_ev_charger.charger_metrics import decode_qccdz_dp6_metrics
 
     return decode_qccdz_dp6_metrics(dps, _profile())
-
 
 
 def test_dp6_frame_decodes_voltage_current_and_power():
@@ -67,7 +63,6 @@ def test_dp6_frame_decodes_voltage_current_and_power():
     assert metrics.alarm is None
 
 
-
 def test_dp6_frame_uses_the_actual_metered_values_when_paused():
     metrics = _decode(PAUSED)
 
@@ -75,7 +70,6 @@ def test_dp6_frame_uses_the_actual_metered_values_when_paused():
     assert metrics.voltage_l1 == pytest.approx(244.0)
     assert metrics.current_l1 == pytest.approx(0.3)
     assert metrics.power_l1 == pytest.approx(0.073)
-
 
 
 def test_dp6_zero_frame_is_a_valid_idle_measurement():
@@ -114,7 +108,6 @@ def test_dp3_state_maps_to_existing_status_vocabulary(raw_state, status):
     assert metrics.status == status
 
 
-
 def test_profile_assistant_recognises_dp3_layout_without_dp6_in_initial_status():
     from tuya_ev_charger.profile_assistant import suggest_profile
 
@@ -123,14 +116,12 @@ def test_profile_assistant_recognises_dp3_layout_without_dp6_in_initial_status()
     assert suggest_profile(initial) == "qccdz_dp6_v1"
 
 
-
 def test_dp6_profile_does_not_expose_unverified_charge_command():
     client = _client(CHARGING)
 
     assert not client.has_dp("do_charge")
     assert asyncio.run(client.async_set_charge_enabled(True)) is False
     assert client._device.set_calls == []
-
 
 
 def test_dp6_profile_accepts_one_amp_steps():
@@ -145,7 +136,6 @@ def test_dp6_profile_accepts_one_amp_steps():
 
     assert asyncio.run(client.async_set_charge_current(14)) is True
     assert calls == [("4", 14, True)]
-
 
 
 def test_dp6_profile_rejects_above_32a():
@@ -171,8 +161,6 @@ class _FakeDevice:
 def _client(dps):
     from tuya_ev_charger.tuya_ev_charger import TuyaEVChargerClient
 
-    client = TuyaEVChargerClient(
-        "dev", "1.2.3.4", "key", "3.5", charger_profile="qccdz_dp6_v1"
-    )
+    client = TuyaEVChargerClient("dev", "1.2.3.4", "key", "3.5", charger_profile="qccdz_dp6_v1")
     client._device = _FakeDevice(dps)
     return client

@@ -258,9 +258,7 @@ def decode_qccdz_dp6_metrics(
     """
     raw_state = _coerce_optional_text(dps.get(QCCDZ_DP6_WORK_STATE))
     work_state_debug = (
-        QCCDZ_DP6_STATE_MAP.get(raw_state.lower(), raw_state.upper())
-        if raw_state
-        else "UNKNOWN"
+        QCCDZ_DP6_STATE_MAP.get(raw_state.lower(), raw_state.upper()) if raw_state else "UNKNOWN"
     )
     frame = _decode_qccdz_dp6_frame(dps.get(QCCDZ_DP6_METRICS))
     phases: dict[str, PhaseMetrics] = {}

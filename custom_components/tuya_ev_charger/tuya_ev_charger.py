@@ -355,8 +355,7 @@ class TuyaEVChargerClient:
             upper = min(upper, max_current)
         if amperage < lower or amperage > upper:
             raise ValueError(
-                f"Current setpoint {amperage}A is out of supported range "
-                f"({lower}-{upper}A)."
+                f"Current setpoint {amperage}A is out of supported range ({lower}-{upper}A)."
             )
         return await self._async_send_command(self._dp.current_target, amperage)
 
