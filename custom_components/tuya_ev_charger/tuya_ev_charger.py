@@ -305,6 +305,13 @@ class TuyaEVChargerClient:
         connection slot, and the live client is left untouched.
         """
 
+        # A DP6 charger keeps one persistent local socket for unsolicited
+        # telemetry. Release that slot before opening the throwaway probe socket,
+        # otherwise the charger may reject the probe as a second connection.
+        persistent_profile = self._dp_profile == CHARGER_PROFILE_QCCDZ_DP6_V1
+        if persistent_profile:
+            await self.async_close()
+
         def _probe() -> bool:
             device = tinytuya.Device(
                 dev_id=self._device_id,
@@ -331,6 +338,9 @@ class TuyaEVChargerClient:
                 return await asyncio.to_thread(_probe)
         except TimeoutError:
             return False
+        finally:
+            if persistent_profile:
+                await self.async_connect()
 
     async def async_set_charge_current(self, amperage: int, max_current: int | None = None) -> bool:
         lower = min(ALLOWED_CURRENTS)
