@@ -333,15 +333,20 @@ class TuyaEVChargerClient:
             return False
 
     async def async_set_charge_current(self, amperage: int, max_current: int | None = None) -> bool:
+        lower = min(ALLOWED_CURRENTS)
         upper = max(ALLOWED_CURRENTS)
+        if self._dp_profile == CHARGER_PROFILE_QCCDZ_DP6_V1:
+            # DP 4 is a true 1 A step setpoint on this firmware, unlike the
+            # legacy qccdz quick-select ladder in ALLOWED_CURRENTS.
+            upper = QCCDZ_DP6_MAX_CURRENT_A
         if max_current is not None:
             # Respect the charger's own hardware limit (DP 152) on top of the
             # range the integration supports.
             upper = min(upper, max_current)
-        if amperage < min(ALLOWED_CURRENTS) or amperage > upper:
+        if amperage < lower or amperage > upper:
             raise ValueError(
                 f"Current setpoint {amperage}A is out of supported range "
-                f"({min(ALLOWED_CURRENTS)}-{upper}A)."
+                f"({lower}-{upper}A)."
             )
         return await self._async_send_command(self._dp.current_target, amperage)
 
