@@ -103,7 +103,9 @@ async def async_restore_entities(
         registry.async_update_entity_options(entity.entity_id, DOMAIN, options)
         registry.async_update_entity(entity.entity_id, disabled_by=None)
         restored += 1
-        LOGGER.debug("Re-enabled %s (%s) for the active charger profile.", entity.entity_id, matched)
+        LOGGER.debug(
+            "Re-enabled %s (%s) for the active charger profile.", entity.entity_id, matched
+        )
 
     if restored:
         LOGGER.info("Re-enabled %d entities for the active charger profile.", restored)
