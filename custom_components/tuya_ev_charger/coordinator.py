@@ -150,6 +150,11 @@ class TuyaEVChargerDataUpdateCoordinator(DataUpdateCoordinator[EVMetrics]):
         # Set while the local connection is deliberately handed to another client
         # (the Smart Life app); see async_release_connection.
         self._release_until: float | None = None
+        # A failed poll must not make the last valid telemetry disappear from HA.
+        # Keep the last sample for display, but mark it stale so regulation can
+        # deliberately refuse to make decisions from it.
+        self._metrics_stale = False
+        self._last_metrics_at: datetime | None = None
         self.regulating = False
 
     async def _async_update_data(self) -> EVMetrics:
@@ -186,6 +191,7 @@ class TuyaEVChargerDataUpdateCoordinator(DataUpdateCoordinator[EVMetrics]):
         self._polls_failed += 1
         self._consecutive_failures += 1
         self._last_failure_at = dt_util.now()
+        self._metrics_stale = self.data is not None
 
         message = await self._async_failure_message()
         if self._last_fault == ConnectionFault.UNDECRYPTABLE:
@@ -215,6 +221,12 @@ class TuyaEVChargerDataUpdateCoordinator(DataUpdateCoordinator[EVMetrics]):
         else:
             self._undecryptable_since = None
             self._reconnect_tried = False
+
+        # Keep the last valid sample visible during a transient communication
+        # gap. If there has never been a successful sample, HA must still report
+        # the entity unavailable rather than inventing a value.
+        if self.data is not None:
+            return self.data
         raise UpdateFailed(message)
 
     async def _async_reconnect_and_fetch(self) -> EVMetrics | None:
@@ -399,6 +411,10 @@ class TuyaEVChargerDataUpdateCoordinator(DataUpdateCoordinator[EVMetrics]):
             if self.update_interval
             else None,
             "connection_released": self.connection_released,
+            "metrics_stale": self._metrics_stale,
+            "last_metrics_at": self._last_metrics_at.isoformat(timespec="seconds")
+            if self._last_metrics_at
+            else None,
         }
 
     def _async_note_success(self) -> None:
@@ -408,6 +424,8 @@ class TuyaEVChargerDataUpdateCoordinator(DataUpdateCoordinator[EVMetrics]):
         self._undecryptable_since = None
         self._reconnect_tried = False
         self._last_success_at = dt_util.now()
+        self._metrics_stale = False
+        self._last_metrics_at = self._last_success_at
         if self._last_fault is not None:
             self._last_fault = None
             self._last_fault_at = 0.0
