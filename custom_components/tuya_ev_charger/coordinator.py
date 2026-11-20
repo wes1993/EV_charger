@@ -378,6 +378,11 @@ class TuyaEVChargerDataUpdateCoordinator(DataUpdateCoordinator[EVMetrics]):
         return None
 
     @property
+    def metrics_stale(self) -> bool:
+        """Whether the last returned telemetry sample is no longer fresh."""
+        return self._metrics_stale
+
+    @property
     def connection_health(self) -> dict[str, Any]:
         """Everything worth knowing about the local link, in one place.
 
