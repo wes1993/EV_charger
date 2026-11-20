@@ -41,4 +41,9 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
           REF: ${{ inputs.ref }}
         run: |
-          gh release create "v$VERSION"             --repo "${{ github.repository }}"             --target "$REF"             --title "$VERSION"             --prerelease             --generate-notes
+          gh release create "v$VERSION" \
+            --repo "${{ github.repository }}" \
+            --target "$REF" \
+            --title "$VERSION" \
+            --prerelease \
+            --generate-notes
