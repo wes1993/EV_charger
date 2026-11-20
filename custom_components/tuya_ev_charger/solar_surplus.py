@@ -368,6 +368,16 @@ class SolarSurplusController:
             )
             return
 
+        # A transient charger communication gap leaves the last valid metrics
+        # available for the dashboard, but they are not safe for load-balancing
+        # decisions. Hold the current setpoint until a fresh sample arrives;
+        # importantly, never ramp up from stale EV telemetry.
+        if self._coordinator.metrics_stale:
+            self._set_decision("telemetry_stale")
+            self._regulation_active = True
+            self._notify_state_listeners()
+            return
+
         if self._restored_session_unverified:
             self._restored_session_unverified = False
             # Known limit: unplugged and replugged during the outage is not
