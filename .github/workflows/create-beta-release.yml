@@ -1,0 +1,44 @@
+name: Create Beta Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch or tag to release"
+        required: true
+        default: "feat/qccdz-dp6-async-metrics"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout release ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Read version from manifest
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(python - <<'PY'
+          import json
+          with open("custom_components/tuya_ev_charger/manifest.json", encoding="utf-8") as f:
+              print(json.load(f)["version"])
+          PY
+          )
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Release version: $VERSION"
+
+      - name: Create GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          REF: ${{ inputs.ref }}
+        run: |
+          gh release create "v$VERSION"             --repo "${{ github.repository }}"             --target "$REF"             --title "$VERSION"             --prerelease             --generate-notes
