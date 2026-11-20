@@ -107,6 +107,7 @@ class DecisionReason(StrEnum):
     SURPLUS_PAUSED_ACTIVE = "surplus_paused_active"
     MISSING_GRID_SENSOR = "missing_grid_sensor"
     GRID_SENSOR_UNAVAILABLE = "grid_sensor_unavailable"
+    TELEMETRY_STALE = "telemetry_stale"
 
     # While charging.
     MIN_RUNTIME_GUARD = "min_runtime_guard"
